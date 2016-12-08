@@ -8,6 +8,8 @@ import (
 
 	"log"
 
+	"strconv"
+
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/valyala/fasthttp"
 )
@@ -38,6 +40,30 @@ func main() {
 	}
 	defer getTables.Close()
 
+	updateTable := func(postArgs *fasthttp.Args, table string) error {
+		fmt.Println(postArgs)
+
+		var sqlUpdate []string
+		//var sqlArgs []string
+		postArgs.VisitAll(func(key, value []byte) {
+			if string(value) != "url" {
+				if string(value) != "" {
+					sqlUpdate = append(sqlUpdate, "`"+string(key)+"` = '"+string(value)+"'")
+				}
+			}
+		})
+		sql := "UPDATE `" + table + "` SET " + strings.Join(sqlUpdate, ", ")
+		//fmt.Println(sql)
+		if len(sqlUpdate) > 0 {
+			_, err := db.Query(sql)
+			if err != nil {
+				fmt.Println(err.Error())
+			}
+		}
+		//fmt.Println(sql)
+		return err
+	}
+
 	h := func(ctx *fasthttp.RequestCtx) {
 		path := strings.Split(string(ctx.Path()), "/")
 		if path[1] == "info" {
@@ -62,9 +88,23 @@ func main() {
 				panic(err.Error())
 			}
 		} else if path[1] == "table" {
+			err := updateTable(ctx.PostArgs(), path[2])
+			if err != nil {
+				fmt.Fprintf(ctx, err.Error()+"<br />")
+			}
 			var f form
-			f.loadMySQL(db, path[2])
+			page64, err := strconv.ParseInt(path[3], 10, 10)
+			if err != nil {
+				panic(err.Error())
+			}
+			page := int(page64)
+			f.loadMySQL(db, path[2], page)
 			fmt.Fprintf(ctx, f.compile())
+			if page > 1 {
+				fmt.Fprintf(ctx, "<a href='/table/"+path[2]+"/"+strconv.Itoa(page-1)+"'> Prev </a>")
+			}
+			fmt.Fprintf(ctx, "<a href='/table/"+path[2]+"/"+strconv.Itoa(page+1)+"'> Next </a>")
+
 			ctx.SetContentType("text/html; charset=UTF-8")
 		} else {
 			var table string
@@ -74,7 +114,7 @@ func main() {
 			}
 			for tables.Next() {
 				tables.Scan(&table)
-				fmt.Fprintf(ctx, "<p><a href='/table/"+table+"'>"+table+"</a></p>")
+				fmt.Fprintf(ctx, "<p><a href='/table/"+table+"/1'>"+table+"</a></p>")
 			}
 
 			fmt.Fprintf(ctx, "<p><a href='/insert/'>Insert</a></p>")
