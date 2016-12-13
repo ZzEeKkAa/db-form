@@ -19,10 +19,16 @@ var (
 	compress = flag.Bool("compress", false, "Whether to enable transparent response compression")
 )
 
+var set Settings
+
 func main() {
+	initSettings()
 	flag.Parse()
 
-	db, err := sql.Open("mysql", "root:toortoortoor@tcp(localhost:3306)/rtb")
+	//db, err := sql.Open("mysql", "root:toortoortoor@tcp(localhost:3306)/rtb")
+
+	db, err := sql.Open("mysql", "root@tcp(192.168.2.84:3306)/rtb")
+
 	if err != nil {
 		panic(err.Error())
 	}
@@ -46,7 +52,7 @@ func main() {
 		var sqlUpdate []string
 		//var sqlArgs []string
 		postArgs.VisitAll(func(key, value []byte) {
-			if string(value) != "url" {
+			if string(value) != "primary_keys" && string(value) != "primary_values" {
 				if string(value) != "" {
 					sqlUpdate = append(sqlUpdate, "`"+string(key)+"` = '"+string(value)+"'")
 				}
@@ -65,6 +71,10 @@ func main() {
 	}
 
 	h := func(ctx *fasthttp.RequestCtx) {
+		fmt.Fprintf(ctx, `<html><head><link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script><style>body{text-align:center} form{margin: 0 auto; width:600px}</style></head><body>`)
+
 		path := strings.Split(string(ctx.Path()), "/")
 		if path[1] == "info" {
 			fmt.Fprintf(ctx, "Request method is %q\n", ctx.Method())
@@ -101,9 +111,9 @@ func main() {
 			f.loadMySQL(db, path[2], page)
 			fmt.Fprintf(ctx, f.compile())
 			if page > 1 {
-				fmt.Fprintf(ctx, "<a href='/table/"+path[2]+"/"+strconv.Itoa(page-1)+"'> Prev </a>")
+				fmt.Fprintf(ctx, "<a class='btn btn-info' role='button' href='/table/"+path[2]+"/"+strconv.Itoa(page-1)+"'> Prev </a>")
 			}
-			fmt.Fprintf(ctx, "<a href='/table/"+path[2]+"/"+strconv.Itoa(page+1)+"'> Next </a>")
+			fmt.Fprintf(ctx, "<a class='btn btn-info' role='button' href='/table/"+path[2]+"/"+strconv.Itoa(page+1)+"'> Next </a>")
 
 			ctx.SetContentType("text/html; charset=UTF-8")
 		} else {
@@ -120,6 +130,8 @@ func main() {
 			fmt.Fprintf(ctx, "<p><a href='/insert/'>Insert</a></p>")
 			ctx.SetContentType("text/html; charset=UTF-8")
 		}
+
+		fmt.Fprintf(ctx, `</body></html>`)
 	}
 	if *compress {
 		h = fasthttp.CompressHandler(h)

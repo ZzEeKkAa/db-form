@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"strconv"
+	"strings"
 )
 
 type form struct {
@@ -26,7 +27,7 @@ func (i *input) compile() string {
 		res += i.idescript + ":</br>"
 	}
 
-	res += "<input type='" + i.itype + "'"
+	res += "<input class='form-control' type='" + i.itype + "'"
 	if i.ivalue != "" {
 		res += " value='" + i.ivalue + "'"
 	}
@@ -39,7 +40,7 @@ func (i *input) compile() string {
 
 func (f *form) compile() string {
 	var res string
-	res += "<form"
+	res += "<form class='form-group'"
 	if f.method != "" {
 		res += " method='" + f.method + "'"
 	}
@@ -80,6 +81,20 @@ func (f *form) loadMySQL(db *sql.DB, tableName string, page int) {
 	for i, column := range columns {
 		f.inputs = append(f.inputs, input{idescript: column, iname: column, ivalue: string(*resp[i].(*[]byte)), itype: "text"})
 	}
+
+	primary_keys := set.GetTableKey(tableName)
+	primary_values := make([]string, len(primary_keys))
+	primary_changed := make([]bool, len(primary_keys))
+	for i, column := range columns {
+		for j, col := range primary_values {
+			if col == column && !primary_changed[j] {
+				primary_changed[j] = true
+				primary_values[j] = string(*resp[i].(*[]byte))
+			}
+		}
+	}
+	f.inputs = append(f.inputs, input{itype: "hidden", iname: "primary_keys", ivalue: strings.Join(primary_keys, ",")})
+	f.inputs = append(f.inputs, input{itype: "hidden", iname: "primary_values", ivalue: strings.Join(primary_values, ",")})
 
 	f.inputs = append(f.inputs, input{itype: "submit", ivalue: "Save"})
 	f.method = "POST"
