@@ -27,7 +27,8 @@ func main() {
 
 	//db, err := sql.Open("mysql", "root:toortoortoor@tcp(localhost:3306)/rtb")
 
-	db, err := sql.Open("mysql", "root@tcp(192.168.2.84:3306)/rtb")
+	//db, err := sql.Open("mysql", "root@tcp(192.168.2.84:3306)/rtb")
+	db, err := sql.Open("mysql", "root@tcp(localhost:3306)/rtb")
 
 	if err != nil {
 		panic(err.Error())
@@ -50,17 +51,42 @@ func main() {
 		fmt.Println(postArgs)
 
 		var sqlUpdate []string
+		var primaryKeys []string
+		var primaryValues []string
 		//var sqlArgs []string
 		postArgs.VisitAll(func(key, value []byte) {
-			if string(value) != "primary_keys" && string(value) != "primary_values" {
-				if string(value) != "" {
-					sqlUpdate = append(sqlUpdate, "`"+string(key)+"` = '"+string(value)+"'")
-				}
+			val := string(value)
+			switch string(key){ 
+				case "primary_keys":
+					primaryKeys = strings.Split(val,",")
+				case "primary_values":
+					primaryValues = strings.Split(val,",")
+				default:				
+					if string(value) != "" {
+						sqlUpdate = append(sqlUpdate, "`"+string(key)+"` = '"+string(value)+"'")
+					}
 			}
 		})
-		sql := "UPDATE `" + table + "` SET " + strings.Join(sqlUpdate, ", ")
-		//fmt.Println(sql)
+		
+		sql :=""
+		insert := true
+		for _,v:=range primaryValues{
+			if v!=""{
+				insert = false
+			}
+		}
+		if insert{
+			sql+= "INSERT INTO `" + table + "` SET "+strings.Join(sqlUpdate,", ");
+		} else{
+			sql += "UPDATE `" + table + "` SET " + strings.Join(sqlUpdate, ", ") + " WHERE "
+			var whereRule []string
+			for i:=range primaryKeys{
+				whereRule= append(whereRule," `"+primaryKeys[i]+"`='"+primaryValues[i]+"'")
+			}
+			sql += strings.Join(whereRule," AND ")
+		}
 		if len(sqlUpdate) > 0 {
+			fmt.Println(sql)
 			_, err := db.Query(sql)
 			if err != nil {
 				fmt.Println(err.Error())
