@@ -26,9 +26,8 @@ func main() {
 	flag.Parse()
 
 	//db, err := sql.Open("mysql", "root:toortoortoor@tcp(localhost:3306)/rtb")
-
-	//db, err := sql.Open("mysql", "root@tcp(192.168.2.84:3306)/rtb")
-	db, err := sql.Open("mysql", "root@tcp(localhost:3306)/rtb")
+	db, err := sql.Open("mysql", "root@tcp(192.168.2.84:3306)/rtb")
+	//db, err := sql.Open("mysql", "root@tcp(localhost:3306)/rtb")
 
 	if err != nil {
 		panic(err.Error())
@@ -48,7 +47,7 @@ func main() {
 	defer getTables.Close()
 
 	updateTable := func(postArgs *fasthttp.Args, table string) error {
-		fmt.Println(postArgs)
+		var err error
 
 		var sqlUpdate []string
 		var primaryKeys []string
@@ -56,43 +55,41 @@ func main() {
 		//var sqlArgs []string
 		postArgs.VisitAll(func(key, value []byte) {
 			val := string(value)
-			switch string(key){ 
-				case "primary_keys":
-					primaryKeys = strings.Split(val,",")
-				case "primary_values":
-					primaryValues = strings.Split(val,",")
-				default:				
-					if string(value) != "" {
-						sqlUpdate = append(sqlUpdate, "`"+string(key)+"` = '"+string(value)+"'")
-					}
+			switch string(key) {
+			case "primary_keys":
+				primaryKeys = strings.Split(val, ",")
+			case "primary_values":
+				primaryValues = strings.Split(val, ",")
+			default:
+				if string(value) != "" {
+					sqlUpdate = append(sqlUpdate, "`"+string(key)+"` = '"+string(value)+"'")
+				} else {
+					sqlUpdate = append(sqlUpdate, "`"+string(key)+"` = null")
+				}
 			}
 		})
-		
-		sql :=""
+
+		sql := ""
 		insert := true
-		for _,v:=range primaryValues{
-			if v!=""{
+		for _, v := range primaryValues {
+			if v != "" {
 				insert = false
 			}
 		}
-		if insert{
-			sql+= "INSERT INTO `" + table + "` SET "+strings.Join(sqlUpdate,", ");
-		} else{
+		if insert {
+			sql += "INSERT INTO `" + table + "` SET " + strings.Join(sqlUpdate, ", ")
+		} else {
 			sql += "UPDATE `" + table + "` SET " + strings.Join(sqlUpdate, ", ") + " WHERE "
 			var whereRule []string
-			for i:=range primaryKeys{
-				whereRule= append(whereRule," `"+primaryKeys[i]+"`='"+primaryValues[i]+"'")
+			for i := range primaryKeys {
+				whereRule = append(whereRule, " `"+primaryKeys[i]+"`='"+primaryValues[i]+"'")
 			}
-			sql += strings.Join(whereRule," AND ")
+			sql += strings.Join(whereRule, " AND ")
 		}
 		if len(sqlUpdate) > 0 {
 			fmt.Println(sql)
-			_, err := db.Query(sql)
-			if err != nil {
-				fmt.Println(err.Error())
-			}
+			_, err = db.Query(sql)
 		}
-		//fmt.Println(sql)
 		return err
 	}
 
@@ -125,8 +122,9 @@ func main() {
 			}
 		} else if path[1] == "table" {
 			err := updateTable(ctx.PostArgs(), path[2])
+			fmt.Fprintf(ctx, "<h3>Form `"+path[2]+"`</h3>")
 			if err != nil {
-				fmt.Fprintf(ctx, err.Error()+"<br />")
+				fmt.Fprintf(ctx, "<div class='alert alert-danger'>"+err.Error()+"</div>")
 			}
 			var f form
 			page64, err := strconv.ParseInt(path[3], 10, 10)
@@ -148,12 +146,13 @@ func main() {
 			if err != nil {
 				panic(err.Error())
 			}
+			fmt.Fprintf(ctx, "<h3>Forms</h3><div class='list-group'>")
 			for tables.Next() {
 				tables.Scan(&table)
-				fmt.Fprintf(ctx, "<p><a href='/table/"+table+"/1'>"+table+"</a></p>")
+				fmt.Fprintf(ctx, "<a href='/table/"+table+"/1' class='list-group-item'>"+table+"</a>")
 			}
+			fmt.Fprintf(ctx, "</div>")
 
-			fmt.Fprintf(ctx, "<p><a href='/insert/'>Insert</a></p>")
 			ctx.SetContentType("text/html; charset=UTF-8")
 		}
 

@@ -3,8 +3,8 @@ package main
 import "strings"
 
 type Settings struct {
-	tableKey      map[string]([]string)
-	connectionKey map[string]string
+	tableKey          map[string]([]string)
+	connectionKey     map[string]string
 	connectionColumns map[string][]string
 }
 
@@ -38,11 +38,32 @@ func (s *Settings) GetConnection(table, key string) (tab, col string, columnsToS
 }
 
 func initSettings() {
-	set.connectionColumns = make(map[string][]string,0)
-	set.connectionKey = make(map[string]string,0)
-	set.SetTableKey("adgroups", "adgroup_id")
-	set.SetTableKey("banners", "banner_id")
+	set.connectionColumns = make(map[string][]string, 0)
+	set.connectionKey = make(map[string]string, 0)
+	set.SetTableKey("presidents", "passport_id")
 	set.SetTableKey("companies", "url")
+	set.SetTableKey("companies_show_banners", "banners_banner_id", "companies_url")
+	set.SetTableKey("banners", "banner_id")
+	set.SetTableKey("static_banners", "banner_id")
+	set.SetTableKey("video_banners", "banner_id")
+	set.SetTableKey("interactive_banners", "banner_id")
+	set.SetTableKey("scripts", "url")
+	set.SetTableKey("licences", "url")
+	set.SetTableKey("bsl", "licence_url", "banner_id", "script_url")
 
-	set.SetConnection("companies", "president", "presidents", "passprot_id", "name")
+	set.SetTableKey("adgroups", "adgroup_id")
+	set.SetConnection("companies", "president", "presidents", "passport_id", "name", "born_year")
+	set.SetConnection("banners", "companie_owner", "companies", "url", "url")
+	set.SetConnection("companies_show_banners", "banners_banner_id", "banners", "banner_id", "banner_id", "name")
+	set.SetConnection("companies_show_banners", "companies_url", "companies", "url", "url")
+	set.SetConnection("static_banners", "banner_id", "banners", "banner_id", "banner_id", "name")
+	set.SetConnection("video_banners", "banner_id", "banners", "banner_id", "banner_id", "name")
+	set.SetConnection("interactive_banners", "banner_id", "banners", "banner_id", "banner_id", "name")
+
+	set.SetConnection("bsl", "banner_id", "interactive_banners", "banner_id", "banner_id", "name")
+	set.SetConnection("bsl", "licence_url", "licences", "url", "name")
+	set.SetConnection("bsl", "script_url", "scripts", "url", "name", "year")
+
+	set.SetConnection("scripts", "based_script_url", "scripts", "url", "name", "year")
+
 }
