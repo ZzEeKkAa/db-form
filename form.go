@@ -29,7 +29,6 @@ type selectbox struct {
 
 func (i *input) compile() string {
 	var res string
-	res += "<p>"
 
 	if i.idescript != "" {
 		res += i.idescript + ":</br>"
@@ -42,7 +41,7 @@ func (i *input) compile() string {
 	if i.iname != "" {
 		res += " name='" + i.iname + "'"
 	}
-	res += " /></p>"
+	res += " />"
 	return res
 }
 
@@ -57,10 +56,10 @@ func (f *form) compile() string {
 	}
 	res += ">"
 	for _, i := range f.inputs {
-		res += i.compile()
+		res += "<p>" + i.compile() + "</p>"
 	}
 	for _, s := range f.selectboxes {
-		res += s.compile()
+		res += "<p>" + s.compile() + "</p>"
 	}
 	inp := input{itype: "submit", ivalue: "Save"}
 	res += inp.compile()
@@ -166,7 +165,6 @@ func (s *selectbox) loadMySQL(db *sql.DB, tableName, columnName string, columnsT
 
 func (s *selectbox) compile() string {
 	var res string
-	res += "<p>"
 
 	if s.idescript != "" {
 		res += s.idescript + ":</br>"
@@ -187,6 +185,6 @@ func (s *selectbox) compile() string {
 		res += ">" + val + "</option>"
 	}
 
-	res += "</select></p>"
+	res += "</select>"
 	return res
 }

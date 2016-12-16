@@ -20,9 +20,12 @@ var (
 )
 
 var set Settings
+var queries []Query
+var zvits []Zvit
 
 func main() {
 	initSettings()
+	zvits = initZvits()
 	flag.Parse()
 
 	//db, err := sql.Open("mysql", "root:toortoortoor@tcp(localhost:3306)/rtb")
@@ -33,6 +36,8 @@ func main() {
 		panic(err.Error())
 	}
 	defer db.Close()
+
+	queries = initQueries(db)
 
 	stmtIns, err := db.Prepare("INSERT INTO companies VALUES(?,?,?,?)")
 	if err != nil {
@@ -99,22 +104,7 @@ func main() {
   <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script><style>body{text-align:center} form{margin: 0 auto; width:600px}</style></head><body>`)
 
 		path := strings.Split(string(ctx.Path()), "/")
-		if path[1] == "info" {
-			fmt.Fprintf(ctx, "Request method is %q\n", ctx.Method())
-			fmt.Fprintf(ctx, "RequestURI is %q\n", ctx.RequestURI())
-			fmt.Fprintf(ctx, "Requested path is %q\n", ctx.Path())
-			fmt.Fprintf(ctx, "Host is %q\n", ctx.Host())
-			fmt.Fprintf(ctx, "Query string is %q\n", ctx.QueryArgs())
-			fmt.Fprintf(ctx, "User-Agent is %q\n", ctx.UserAgent())
-			fmt.Fprintf(ctx, "Connection has been established at %s\n", ctx.ConnTime())
-			fmt.Fprintf(ctx, "Request has been started at %s\n", ctx.Time())
-			fmt.Fprintf(ctx, "Serial request number for the current connection is %d\n", ctx.ConnRequestNum())
-			fmt.Fprintf(ctx, "Your ip is %q\n\n", ctx.RemoteIP())
-
-			fmt.Fprintf(ctx, "Raw request is:\n---CUT---\n%s\n---CUT---", &ctx.Request)
-
-			ctx.SetContentType("text/plain; charset=UTF-8")
-		} else if path[1] == "insert" {
+		if path[1] == "insert" {
 			_, err = stmtIns.Exec("http://pupkin.com/", nil, "Pupkin SSP", "Pupkin DSP")
 
 			if err != nil {
@@ -138,8 +128,94 @@ func main() {
 				fmt.Fprintf(ctx, "<a class='btn btn-info' role='button' href='/table/"+path[2]+"/"+strconv.Itoa(page-1)+"'> Prev </a>")
 			}
 			fmt.Fprintf(ctx, "<a class='btn btn-info' role='button' href='/table/"+path[2]+"/"+strconv.Itoa(page+1)+"'> Next </a>")
+		} else if path[1] == "zvit" {
+			zvit_id, err := strconv.ParseInt(path[2], 10, 64)
+			if err != nil || zvit_id < 0 || int(zvit_id) >= len(zvits) {
+				fmt.Fprintf(ctx, "<h3>Unknown zvit!</h3>")
+			} else {
+				zvit := &zvits[zvit_id]
 
-			ctx.SetContentType("text/html; charset=UTF-8")
+				fmt.Fprintf(ctx, "<h3>"+zvit.name+"</h3>")
+
+				sql := zvit.sql
+
+				q, err := db.Prepare(sql)
+				if err != nil {
+					panic(err)
+				}
+				rows, err := q.Query()
+				columns, err := rows.Columns()
+
+				resp := []interface{}{}
+				for range columns {
+					resp = append(resp, new([]byte))
+				}
+				fmt.Fprintf(ctx, "<table class='table'><thead><tr><th>"+strings.Join(columns, "</th><th>")+"</th></tr><tbody>")
+				for rows.Next() {
+					rows.Scan(resp...)
+					var vals []string
+					for _, i := range resp {
+						vals = append(vals, string(*i.(*[]byte)))
+					}
+					fmt.Fprintf(ctx, "<tr><td>"+strings.Join(vals, "</td><td>")+"</td></tr>")
+				}
+
+				fmt.Fprintf(ctx, "</tbody></table>")
+			}
+		} else if path[1] == "query" {
+			query_id, err := strconv.ParseInt(path[2], 10, 64)
+			if err != nil || query_id < 0 || int(query_id) >= len(queries) {
+				fmt.Fprintf(ctx, "<h3>Unknown query!</h3>")
+			} else {
+				query := &queries[query_id]
+
+				showTable := false
+				ctx.PostArgs().VisitAll(func(key, value []byte) {
+					_, ok := query.data[string(key)]
+					if ok {
+						showTable = true
+						switch query.data[string(key)].(type) {
+						case input:
+							inp := query.data[string(key)].(input)
+							inp.ivalue = string(value)
+							query.data[string(key)] = inp
+						case selectbox:
+							sb := query.data[string(key)].(selectbox)
+							sb.iselected = string(value)
+							query.data[string(key)] = sb
+						}
+					}
+				})
+
+				fmt.Fprintf(ctx, "<h3>"+query.name+"</h3>")
+				fmt.Fprintf(ctx, query.BuildDescription("/query/"+path[2], ""))
+				if showTable {
+					sql := query.BuildSql()
+					fmt.Println(sql)
+					q, err := db.Prepare(sql)
+					if err != nil {
+						panic(err)
+					}
+					rows, err := q.Query()
+					columns, err := rows.Columns()
+
+					resp := []interface{}{}
+					for range columns {
+						resp = append(resp, new([]byte))
+					}
+					fmt.Fprintf(ctx, "<table class='table'><thead><tr><th>"+strings.Join(columns, "</th><th>")+"</th></tr><tbody>")
+					for rows.Next() {
+						rows.Scan(resp...)
+						var vals []string
+						for _, i := range resp {
+							vals = append(vals, string(*i.(*[]byte)))
+						}
+						fmt.Fprintf(ctx, "<tr><td>"+strings.Join(vals, "</td><td>")+"</td></tr>")
+					}
+
+					fmt.Fprintf(ctx, "</tbody></table>")
+				}
+			}
 		} else {
 			var table string
 			tables, err := getTables.Query()
@@ -153,10 +229,21 @@ func main() {
 			}
 			fmt.Fprintf(ctx, "</div>")
 
-			ctx.SetContentType("text/html; charset=UTF-8")
+			fmt.Fprintf(ctx, "<h3>Queries</h3><div class='list-group'>")
+			for i, q := range queries {
+				fmt.Fprintf(ctx, "<a href='/query/"+strconv.FormatInt(int64(i), 10)+"' class='list-group-item'>"+q.name+"</a>")
+			}
+			fmt.Fprintf(ctx, "</div>")
+
+			fmt.Fprintf(ctx, "<h3>Zvits</h3><div class='list-group'>")
+			for i, z := range zvits {
+				fmt.Fprintf(ctx, "<a href='/zvit/"+strconv.FormatInt(int64(i), 10)+"' class='list-group-item'>"+z.name+"</a>")
+			}
+			fmt.Fprintf(ctx, "</div>")
 		}
 
 		fmt.Fprintf(ctx, `</body></html>`)
+		ctx.SetContentType("text/html; charset=UTF-8")
 	}
 	if *compress {
 		h = fasthttp.CompressHandler(h)
